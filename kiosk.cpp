@@ -10,6 +10,7 @@
 #include <algorithm>
 #include <vector>
 #include <map>
+#include <iomanip>
 #include "TextTable.h"
 
 #include <typeinfo>
@@ -23,6 +24,7 @@ string auth_name;
 MYSQL* conn;
 MYSQL_ROW row;
 MYSQL_RES* res;
+vector<map<string, string>> cart;
 
 class db_response
 {
@@ -59,11 +61,10 @@ public:
 	}
 };
 
-void newOrder();
-void printMenu(map<string, string>);
+void printItemCategories(string);
+void printItems(map<string, string>);
 void headerLogo();
-void printReceipt(string);
-void viewOrder();
+void viewCart();
 void printReceipt(string);
 void insertItem(string);
 void updateItem(string);
@@ -78,7 +79,8 @@ void viewStaff(string);
 void setting(string);
 void checkManager();
 void logout(string);
-double calculateDiscountedPrice(double, double);
+void itemCheckout();
+float calculateDiscountedPrice(float, float);
 
 // Hashing function
 unsigned int SHF(string);
@@ -173,19 +175,9 @@ void menuCustomer() {
 
 	headerLogo();
 
-	mysql_query(conn, "SELECT * FROM settings");
-	res = mysql_store_result(conn);
-	row = mysql_fetch_row(res);
-
-	string happy_hour_active = row[0], discount_rate = row[1], new_hha, new_dr;
-
-	if (happy_hour_active == "1") {
-		cout << endl << "--- Enjoy Happy Hour With Discount " + discount_rate + "% ---" << endl << endl;
-	}
-
 	cout << "Please Select Menu" << endl;
-	cout << "1. New Order" << endl;
-	cout << "2. View Order" << endl;
+	cout << "1. See available items" << endl;
+	cout << "2. View cart" << endl;
 	cout << "3. Back" << endl;
 
 	cout << endl;
@@ -197,12 +189,12 @@ void menuCustomer() {
 	{
 		case 1:
 		{
-			newOrder();
+			printItemCategories("");
 			break;
 		}
 		case 2:
 		{
-			viewOrder();
+			viewCart();
 			break;
 		}
 		case 3:
@@ -264,8 +256,6 @@ void menuStaff(string name) {
 	}
 
 	cout << "8. Logout" << endl;
-
-
 
 	cout << endl;
 	cout << "Selection :";
@@ -344,12 +334,92 @@ void menuStaff(string name) {
 	}
 }
 
-void printMenu(map<string, string> category)
+void printItemCategories(string error = "")
 {
-	string finditem_query = "SELECT code, name, price, stock FROM items WHERE category='" + category["id"] + "'";
+	system("cls");
+
+	headerLogo();
+
+	if (error != "")
+	{
+		cout << error << endl << endl;
+	}
+
+	string choice;
+	map<string, string> category;
+	vector<map<string, string>> categories;
+
+	mysql_query(conn, "SELECT id, name, code, discount, is_discount FROM categories");
+	res = mysql_store_result(conn);
+
+	while (row = mysql_fetch_row(res))
+	{
+		category["id"] = row[0];
+		category["name"] = row[1];
+		category["code"] = row[2];
+		category["discount"] = row[3];
+		category["is_discount"] = row[4];
+		categories.push_back(category);
+	}
+
+	cout << "Select category :" << endl;
+	for (int i = 0; i < categories.size(); i++)
+	{
+		cout << categories[i]["id"] << ". Category: " << categories[i]["name"] << " ";
+		if (categories[i]["is_discount"] == "1")
+		{
+			cout << "(ON " << categories[i]["discount"] << "% DISCOUNT NOW!!)";
+		}
+		cout << endl;
+	}
+	cout << endl << "Enter (M/m) to go to Main Menu" << endl;
+	cout << endl << "Selection : ";
+	getline(cin, choice);
+
+	if (choice == "M" || choice == "m")
+	{
+		menuCustomer();
+	}
+
+	for (int i = 0; i < categories.size(); i++)
+	{
+		if (choice == categories[i]["id"])
+		{
+			printItems(categories[i]);
+			break;
+		}
+	}
+	printItemCategories("Please Enter Correct ID");
+}
+
+void printItems(map<string, string> category)
+{
+	system("cls");
+
+	headerLogo();
+
+	int id, is_discount;
+	float discount;
+	stringstream(category["id"]) >> id;
+	stringstream(category["discount"]) >> discount;
+	stringstream(category["is_discount"]) >> is_discount;
+	map<string, string> item;
+	vector<map<string, string>> items;
+
+	string finditem_query = "SELECT id, code, name, price, stock FROM items WHERE category='" + category["id"] + "'";
 	const char* qi = finditem_query.c_str();
 	qstate = mysql_query(conn, qi);
 	res = mysql_store_result(conn);
+
+	while (row = mysql_fetch_row(res))
+	{
+		item["id"] = row[0];
+		item["code"] = row[1];
+		item["name"] = row[2];
+		item["price"] = row[3];
+		item["stock"] = row[4];
+		items.push_back(item);
+	}
 
 	TextTable t('-', '|', '+');
 
@@ -357,285 +427,329 @@ void printMenu(map<string, string> category)
 	t.add("PRICE (RM)");
 	t.add("NAME");
 	t.add("STOCK");
-	if (category["is_discount"] == "1")
+	if (is_discount == 1)
 	{
 		t.add("DISCOUNTED PRICE");
 	}
 	t.endOfRow();
 
-	while (row = mysql_fetch_row(res)) {
-		t.add(row[0]);
-		t.add(row[2]);
-		t.add(row[1]);
-		int not_in_stock;
-		stringstream (row[3]) >> not_in_stock;
+	for (int i = 0; i < items.size(); i++)
+	{
+		t.add(items[i]["code"]);
+		t.add(items[i]["price"]);
+		t.add(items[i]["name"]);
+		int stock;
+		stringstream (items[i]["stock"]) >> stock;
 
-		if (not_in_stock > 0) {
-			t.add(row[3]);
+		if (stock > 0) {
+			t.add(items[i]["stock"]);
 		}
 		else {
 			t.add("OUT OF STOCK");
 		}
 
-		if (category["is_discount"] == "1")
+		if (is_discount == 1)
 		{
-			double price;
-			double discount;
+			float price;
 			string discounted_price;
-			stringstream (category["price"]) >> price;
-			stringstream (category["discount"]) >> discount;
-			stringstream (calculateDiscountedPrice(price, discount)) >> discounted_price;
+			stringstream (items[i]["price"]) >> price;
+			stringstream ss;
+			ss << fixed << setprecision(2) << calculateDiscountedPrice(price, discount);
+			ss >> discounted_price;
 			t.add(discounted_price);
 		}
 
 		t.endOfRow();
 	}
 
-	t.setAlignment(4, TextTable::Alignment::RIGHT);
+	t.setAlignment(5, TextTable::Alignment::RIGHT);
+
+	headerLogo();
+
+	cout << " >>    PICK YOUR PRODUCTS     <<" << endl << endl;
 
 	cout << t;
 
 	cout << endl;
-}
 
-double calculateDiscountedPrice(double price, double discount)
-{
-	double discounted_price;
-	discounted_price = (double)price - (discount / (double)100 * (double)price);
-	return discounted_price;
-}
-
-void newOrder() {
-
-	system("cls");
-
-	map<string, string> category;
-	vector<map<string, string>> categories;
-
-	int x = 1, orderItemId[20] = { NULL };
-	string code = "", orderItemPrice[20];
 	char again;
-	float ttl_price = 0.00;
+	string item_error = "";
+	bool proceed = false;
 
-	mysql_query(conn, "SELECT id, name, discount, is_discount FROM categories");
-	res = mysql_store_result(conn);
-
-	while (row = mysql_fetch_row(res))
+	do
 	{
-		category["id"] = row[0];
-		category["name"] = row[1];
-		category["discount"] = row[2];
-		category["is_discount"] = row[3];
-		categories.push_back(category);
-	}
+		string code;
+		float amount;
 
-	do {
-		headerLogo();
-		cout << " >>    PICK YOUR PRODUCTS     <<" << endl << endl;
-
-		for (int i = 0; i < categories.size(); i++)
-		{
-			cout << "Category: " << categories[i]["name"] << " ";
-			if (categories[i]["is_discount"] == "1")
-			{
-				cout << "(ON " << categories[i]["discount"] << "% DISCOUNT NOW!!)";
-			}
-			cout << endl << endl;
-			printMenu(categories[i]);
+		if (item_error != "") {
+			cout << item_error << endl;
 		}
 
-		cout << "Insert Item Code (Item No. " << x << ')' << endl;
+		cout << "Insert Item Code (Item No. " << cart.size() << ')' << endl;
 		cout << "CODE :";
 		getline(cin, code);
+		cout << "AMOUNT :";
+		getline(cin, temp);
+		stringstream(temp) >> amount;
 
-		string findbyid_query = "SELECT * FROM items WHERE code = '" + code + "'";
-		const char* qi = findbyid_query.c_str();
-		qstate = mysql_query(conn, qi);
+		for (int i = 0; i < items.size(); i++)
+		{
+			int stock;
+			float price;
+			stringstream(items[i]["stock"]) >> stock;
+			stringstream(items[i]["price"]) >> price;
+			if (code == items[i]["code"])
+			{
+				if (amount > 0 && amount <= stock)
+				{
+					map<string, string> bought_item;
+					float calc;
+					bought_item = items[i];
+					stringstream(amount) >> temp;
+					bought_item["amount"] = temp;
+					calc = amount * price;
+					stringstream ss;
+					ss << fixed << setprecision(2) << calc;
+					ss >> bought_item["total_price"];
+					
+					if (is_discount == 1) 
+					{
+						stringstream ss;
+						ss << fixed << setprecision(2) << calculateDiscountedPrice(amount * price, discount);
+						ss >> bought_item["discounted_price"];
+					}
+					else
+					{
+						bought_item["discounted_price"] = bought_item["total_price"];
+					}
 
+					cart.push_back(bought_item);
+					stringstream(stock - amount) >> items[i]["stock"];
+					proceed = true;
+					break;
+				}
+				else if (amount > stock)
+				{
+					item_error = "Not enough stock!";
+				}
+				else
+				{
+					item_error = "Please enter the right amount";
+				}
+			}
+		}
+
+		if (proceed)
+		{
+			cout << "Add other item (Y/y)" << endl;
+			cout << "Choose other category (B/b)" << endl;
+			cout << "Cancel order (X/x)" << endl;
+			cout << "Press any other key to checkout.." << endl;
+			getline(cin, temp);
+			stringstream(temp) >> again;
+
+			if (again == 'X' || again == 'x') {
+				cart.clear();
+				menuCustomer();
+			}
+			else if (again == 'B' || again == 'b') {
+				printItemCategories();
+			}
+		}
+		else
+		{
+			item_error = "Item Code: " + code + " does not exist";
+		}
+
+	} while ((again == 'Y') || (again == 'y') || !proceed);
+	itemCheckout();
+}
+
+void itemCheckout()
+{
+	if (cart.size() > 0)
+	{
+		map<string, string> orders;
+		float total_price = 0;
+		float after_discount = 0;
+
+		for (int i = 0; i < cart.size(); i++)
+		{
+			float price;
+			stringstream(cart[i]["total_price"]) >> price;
+			total_price += price;
+			stringstream(cart[i]["discounted_price"]) >> price;
+			after_discount += price;
+		}
+
+		stringstream tp;
+		tp << fixed << setprecision(2) << total_price;
+		tp >> orders["total_price"];
+		stringstream ad;
+		ad << fixed << setprecision(2) << after_discount;
+		ad >> orders["after_discount"];
+
+		string insert_order_q = "INSERT INTO orders (total_price, after_discount) VALUE ('" + orders["total_price"] + "', '" + orders["after_discount"] + "')";
+		cout << insert_order_q << endl;
+		const char* lid_str = insert_order_q.c_str();
+		mysql_query(conn, lid_str);
+
+		string get_order_id = "SELECT id FROM orders ORDER by id DESC LIMIT 1";
+		lid_str = get_order_id.c_str();
+		qstate = mysql_query(conn, lid_str);
+		
 		if (!qstate) {
+			cout << "Here 5" << endl;
 			res = mysql_store_result(conn);
+			row = mysql_fetch_row(res);
 
-			int ttlRow = mysql_num_rows(res);
+			orders["id"] = row[0];
 
-			if (ttlRow > 0) {
+			cout << "Here 6" << endl;
 
-				row = mysql_fetch_row(res);
-				cout << "MENU :" << row[1] << "-" << row[2] << endl;
-				cout << "RM :" << row[4] << endl << endl;
-
-				ttl_price += stof(row[4]);
-				orderItemPrice[x] = row[4];
-
-				//store data to array
-				string item_id = row[0];
-				orderItemId[x] = atoi(item_id.c_str()); //convert string to int
-
-				x++;
+			for (int i = 0; i < cart.size(); i++)
+			{
+				string order_q = "INSERT INTO order_items (orders, items, amount, total_price, after_discount) VALUES ('" + orders["id"] + "', '" + cart[i]["id"] + "','" + cart[i]["amount"] + "','" + cart[i]["total_price"] + "','" + cart[i]["discounted_price"] + "')";
+				const char* order_str = order_q.c_str();
+				qstate = mysql_query(conn, order_str);
+				if (qstate) 
+				{
+					cout << "Query Execution Problem!" << mysql_errno(conn) << endl;
+				}
 
 			}
-			else {
-				cout << "Item not found!" << endl;
-			}
-
 		}
 		else {
 			cout << "Query Execution Problem!" << mysql_errno(conn) << endl;
 		}
+		cart.clear();
+		printReceipt(orders["id"]);
 
-
-
-		cout << "Add other item?(Y/y) or (N/n) or 'x' to cancel'" << endl;
-		getline(cin, temp);
-		stringstream (temp) >> again;
-
-		if (again == 'x') {
-			menuCustomer();
-		}
-
-
-	} while ((again == 'Y') || (again == 'y'));
-
-	//check at least 1 order
-
-
-	//list out all order list
-
-	system("cls");
-
-	
-
-	//insert into order
-	/*string order_q = "INSERT INTO orders(price, status, discount_rate, after_discount) values ('" + to_string(ttl_price) + "', 1, '" + to_string(discount) + "', '" + to_string(after_discount) + "')";
-	const char* order_str = order_q.c_str();
-	qstate = mysql_query(conn, order_str);*/
-
-	//get last row id
-	string last_id_q = "SELECT id FROM orders ORDER by id DESC LIMIT 1";
-	const char* lid_str = last_id_q.c_str();
-	qstate = mysql_query(conn, lid_str);
-	res = mysql_store_result(conn);
-	row = mysql_fetch_row(res);
-
-	string order_id = row[0];
-
-	for (int i = 1; i <= 11; i++) {
-
-		if (orderItemId[i] != NULL) {
-
-			string order_id = row[0];
-
-			string order_q = "INSERT INTO order_items (order_id, item_id, price, notes) VALUES ('" + order_id + "', '" + to_string(orderItemId[i]) + "','" + orderItemPrice[i] + "','EX NOTES')";
-			const char* order_str = order_q.c_str();
-			qstate = mysql_query(conn, order_str);
-
-		}
-		else {
-			break; // exit from loop;
-		}
+		endMenu();
 	}
-
-	printReceipt(order_id);
-
-	cout << endl << "Your order No is : #" << order_id << endl << "Enter any key to continue =>";
-	getline(cin, order_id);
-
-	menuCustomer();
 }
 
-void viewOrder() {
+float calculateDiscountedPrice(float price, float discount)
+{
+	float discounted_price;
+	string new_price;
+	discounted_price = price - (discount / (float)100 * price);
+	return discounted_price;
+}
 
-	string order_id;
-	bool res_found = false;
-	do {
+void viewCart() {
 
-		//list out all order list
+	string checkout;
 
-		headerLogo();
-		cout << " >>    VIEW ORDER     <<" << endl << endl;
+	headerLogo();
 
-		cout << "Order No :";
-		getline(cin, order_id);
+	cout << " >>    YOUR CART     <<" << endl << endl;
 
-		string findbyid_query = "SELECT * FROM orders WHERE id='" + order_id + "'";
-		const char* qi = findbyid_query.c_str();
-		qstate = mysql_query(conn, qi);
+	if (cart.size() > 0)
+	{
+		TextTable t('-', '|', '+');
 
-		if (!qstate) {
-			res = mysql_store_result(conn);
+		t.add("CODE");
+		t.add("ITEM");
+		t.add("PRICE PER ITEM");
+		t.add("AMOUNT");
+		t.add("TOTAL PRICE");
+		t.add("PRICE AFTER DISCOUNT");
+		t.endOfRow();
 
-			int ttlRow = mysql_num_rows(res);
-
-			if (ttlRow > 0) {
-
-				row = mysql_fetch_row(res);
-				res_found = true;
-				printReceipt(row[0]);
-			}
-			else {
-				cout << "Invalid Order No!" << endl;
-			}
+		for (int i = 0; i < cart.size(); i++)
+		{
+			t.add(cart[i]["code"]);
+			t.add(cart[i]["name"]);
+			t.add(cart[i]["price"]);
+			t.add(cart[i]["amount"]);
+			t.add(cart[i]["total_price"]);
+			t.add(cart[i]["discounted_price"]);
+			t.endOfRow();
 		}
-		else {
-			cout << "MySQL Error" << endl;
-		}
 
-	} while (!res_found);
+		cout << t << endl << endl;
+	}
+	else
+	{
+		cout << " >>    YOUR CART IS EMPTY     <<" << endl << endl;
+	}
 
-	endMenu();
-
+	cout << "Do you want to proceed to checkout?(Y/y), Enter any key to go back to menu.." << endl;
+	getline(cin, checkout);
+	
+	if (checkout == "Y" || checkout == "y")
+	{
+		itemCheckout();
+	}
+	else
+	{
+		menuCustomer();
+	}
 }
 
 void printReceipt(string id) {
+	system("cls");
 
-	int indexForId = 0;
-	string items[5000];
+	string date, total, total_discounted;
 
-	string order_q = "SELECT price,status,discount_rate,after_discount,created_at FROM orders WHERE id='" + id + "'";
-	const char* order_str = order_q.c_str();
-	qstate = mysql_query(conn, order_str);
-	res = mysql_store_result(conn);
-	row = mysql_fetch_row(res);
-
-	string o_status = row[1],
-		o_price = row[0],
-		discount_rate = row[2],
-		after_discount = row[3],
-		dt = row[4],
-		status[2] = { "On Going", "Ready" };
-
-	headerLogo();
-	cout << "===================================" << endl;
-	cout << "       RECEIPT #" + id + "      " << endl << endl;
-
-	cout << "Order Status :" + status[stoi(row[2])] << endl;
-	cout << "Time / Date : " << dt << endl;
-
-	string items_q = "SELECT oi.id,i.code,i.name,oi.price FROM order_items AS oi LEFT JOIN items AS i ON i.id=oi.item_id WHERE order_id='" + id + "'";
-
-	const char* qu = items_q.c_str();
-	qstate = mysql_query(conn, qu);
-	if (!qstate)
+	string find_order = "SELECT items.code AS code, items.name AS name, items.price AS price, amount, order_items.total_price AS total_price,  order_items.after_discount AS after_discount, orders.total_price AS total, orders.after_discount AS total_discounted, orders.created_at AS created_at FROM order_items INNER JOIN items ON order_items.items=items.id INNER JOIN orders ON order_items.orders=orders.id WHERE orders='" + id + "';";
+	const char* lid_str = find_order.c_str();
+	qstate = mysql_query(conn, lid_str);
+	if (qstate)
 	{
-		res = mysql_store_result(conn);
-		cout << "CODE\tPRICE\tNAME\n" << endl;
-		while ((row = mysql_fetch_row(res)))
-		{
-			cout << row[1] << "\tRM" << row[3] << "\t" << row[2] << endl;
-			items[indexForId] = row[0];
-			indexForId++;
-		}
-		cout << endl << endl << "\t TOTAL :RM " << o_price;
-		cout << endl << "\t DISCOUNT : " << discount_rate << "%";
-		cout << endl << "\t ================" << endl;
-		cout << "\t  :RM " << after_discount;
-		cout << endl << "\t ================" << endl << endl;
+		cout << "Query Execution Problem!" << mysql_errno(conn) << endl;
+	}
+	res = mysql_store_result(conn);
 
-		cout << "===================================" << endl;
-		cout << "   THANK YOU, PLEASE COME AGAIN    " << endl;
-		cout << "===================================" << endl;
+	TextTable t('-', '|', '+');
+
+	t.add("CODE");
+	t.add("ITEM");
+	t.add("PRICE PER ITEM");
+	t.add("AMOUNT");
+	t.add("TOTAL PRICE");
+	t.add("PRICE AFTER DISCOUNT");
+	t.endOfRow();
+
+	while (row = mysql_fetch_row(res)) {
+		t.add(row[0]);
+		t.add(row[1]);
+		t.add(row[2]);
+		t.add(row[3]);
+		t.add(row[4]);
+		t.add(row[5]);
+		total = row[6];
+		total_discounted = row[7];
+		date = row[8];
+		t.endOfRow();
 	}
 
+	t.setAlignment(6, TextTable::Alignment::RIGHT);
+
+	headerLogo();
+	cout << "========================================================================" << endl;
+	cout << "                           RECEIPT #" + id<< endl << endl;
+	cout << "                     Time / Date : " << date << endl;
+	cout << "========================================================================" << endl;
+	
+	cout << t;
+
+	cout << endl;
+
+	cout << endl << endl << "Total \t\t\t\t\t\t\t:RM " << total;
+	cout << endl << "========================================================================" << endl;
+	cout << "Total After Discount \t\t\t\t\t:RM " << total_discounted;
+	cout << endl << "========================================================================" << endl << endl;
+
+	cout << "========================================================================" << endl;
+	cout << "                     THANK YOU, PLEASE COME AGAIN" << endl;
+	cout << "========================================================================" << endl;
+	
 }
+
+
+
 
 //STAFF FUNCTION
 
@@ -1044,7 +1158,7 @@ void viewMonthlySale(string auth_name) {
 		string dt = to_string(year) + "-" + to_string(month);
 
 
-		string daily_sale_str = "select created_at,sum(after_discount) from orders where YEAR(created_at) = '" + to_string(year) + "' AND MONTH(created_at) = '" + to_string(month) + "' group by month(created_at);";
+		string daily_sale_str = "SELECT created_at, sum(after_discount) from orders where YEAR(created_at) = '" + to_string(year) + "' AND MONTH(created_at) = '" + to_string(month) + "' group by month(created_at);";
 		const char* daily_sale_q = daily_sale_str.c_str();
 		mysql_query(conn, daily_sale_q);
 		res = mysql_store_result(conn);
@@ -1473,9 +1587,9 @@ ExitMenu:
 void headerLogo() {
 
 	system("cls");
-	cout << endl << "===================================" << endl;
-	cout << "|| AWESOME PRODUCT FOR YOUR SKIN ||" << endl;
-	cout << "===================================" << endl << endl;
+	cout << endl << "                  ===================================" << endl;
+	cout << "                  || AWESOME PRODUCT FOR YOUR SKIN ||" << endl;
+	cout << "                  ===================================" << endl << endl;
 }
 
 void checkManager() {
