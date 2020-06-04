@@ -8,7 +8,7 @@
 #include <cstdlib>
 #include <conio.h>
 #include <windows.h>
-#include <mysql.h>
+#include <mysql/mysql.h>
 #include <algorithm>
 #include <vector>
 #include <map>
