@@ -125,9 +125,9 @@ int main()
 	cout << "1. Guest (For Customer)" << endl;
 	cout << "2. Login (For Staff)" << endl << "Selection :";
 	getline(cin, temp);
-	stringstream (temp) >> role; 
+	stringstream(temp) >> role;
 
-	if (role == 1) 
+	if (role == 1)
 	{
 		menuCustomer("");
 	}
@@ -166,7 +166,7 @@ void login(string error)
 	res = mysql_store_result(conn);
 	row = mysql_fetch_row(res);
 
-	if (row) 
+	if (row)
 	{
 		int admin;
 		stringstream(row[0]) >> admin;
@@ -210,34 +210,34 @@ void menuCustomer(string error) {
 	cout << endl;
 	cout << "Selection :";
 	getline(cin, temp);
-	stringstream (temp) >> chooseOneFromMenu; 
+	stringstream(temp) >> chooseOneFromMenu;
 
 	switch (chooseOneFromMenu)
 	{
-		case 1:
-		{
-			viewItemCategories("");
-			break;
-		}
-		case 2:
-		{
-			viewCart();
-			break;
-		}
-		case 3:
-		{
-			main();
-			break;
-		}
-		default:
-		{
-			menuCustomer("Please select correct number");
-		}
+	case 1:
+	{
+		viewItemCategories("");
+		break;
+	}
+	case 2:
+	{
+		viewCart();
+		break;
+	}
+	case 3:
+	{
+		main();
+		break;
+	}
+	default:
+	{
+		menuCustomer("Please select correct number");
+	}
 	}
 
 }
 
-void menuStaff(string name, string error) 
+void menuStaff(string name, string error)
 {
 
 	string menu;
@@ -267,7 +267,7 @@ void menuStaff(string name, string error)
 	cout << "Selection :";
 	getline(cin, menu);
 
-	if(menu == "1")
+	if (menu == "1")
 	{
 		viewAllOrders(name, "");
 	}
@@ -357,11 +357,11 @@ void viewItemCategories(string error)
 	}
 
 	string choice;
-	
+
 	vector<map<string, string>> categories = findAllCategories();
 
 	printItemCategories(categories, "customer");
-	
+
 	cout << endl << "Enter (M/m) to go to Main Menu" << endl;
 	cout << endl << "Selection : ";
 	getline(cin, choice);
@@ -530,7 +530,7 @@ void viewItemsByCategory(map<string, string> category)
 		cout << "Insert Item Code (Item No. " << cart.size() << ')' << endl;
 		cout << "CODE :";
 		getline(cin, code);
-		
+
 		for (int i = 0; i < items.size(); i++)
 		{
 			int stock;
@@ -548,14 +548,15 @@ void viewItemsByCategory(map<string, string> category)
 					map<string, string> bought_item;
 					float calc;
 					bought_item = items[i];
-					stringstream(amount) >> temp;
+					stringstream ss;
+					ss << fixed << amount;
+					ss >> temp;
 					bought_item["amount"] = temp;
 					calc = amount * price;
-					stringstream ss;
 					ss << fixed << setprecision(2) << calc;
 					ss >> bought_item["total_price"];
-					
-					if (is_discount == 1) 
+
+					if (is_discount == 1)
 					{
 						stringstream ss;
 						ss << fixed << setprecision(2) << calculateDiscountedPrice(amount * price, discount);
@@ -567,7 +568,9 @@ void viewItemsByCategory(map<string, string> category)
 					}
 
 					cart.push_back(bought_item);
-					stringstream(stock - amount) >> items[i]["stock"];
+					stringstream ss;
+					ss << fixed << (stock - amount);
+					ss >> items[i]["stock"];
 					proceed = true;
 					break;
 				}
@@ -594,16 +597,16 @@ void viewItemsByCategory(map<string, string> category)
 			getline(cin, temp);
 			stringstream(temp) >> again;
 
-			if (again == "X" || again == "x") 
+			if (again == "X" || again == "x")
 			{
 				cart.clear();
 				menuCustomer("");
 			}
-			else if (again == "B" || again == "b") 
+			else if (again == "B" || again == "b")
 			{
 				viewItemCategories("");
 			}
-			else if (again == "C" || again == "c") 
+			else if (again == "C" || again == "c")
 			{
 				viewCart();
 			}
@@ -647,8 +650,8 @@ void itemCheckout()
 
 		string get_order_id = "SELECT id FROM orders ORDER by id DESC LIMIT 1";
 		lid_str = get_order_id.c_str();
-		
-		if (!mysql_query(conn, lid_str)) 
+
+		if (!mysql_query(conn, lid_str))
 		{
 			res = mysql_store_result(conn);
 			row = mysql_fetch_row(res);
@@ -666,7 +669,7 @@ void itemCheckout()
 				mysql_query(conn, usq);
 			}
 		}
-		else 
+		else
 		{
 			cout << "Query Execution Problem!" << mysql_errno(conn) << endl;
 		}
@@ -729,7 +732,7 @@ void viewCart() {
 			stringstream(cart[i]["discounted_price"]) >> item_total;
 			total_overall += item_total;
 		}
-		
+
 		string total;
 		stringstream ss;
 		ss << fixed << setprecision(2) << total_overall;
@@ -748,10 +751,10 @@ void viewCart() {
 		cout << "Buy some item?(Y/y)" << endl;
 	}
 
-	
+
 	cout << "Selection: ";
 	getline(cin, checkout);
-	
+
 	if (checkout == "Y" || checkout == "y")
 	{
 		viewItemCategories("");
@@ -765,7 +768,7 @@ void viewCart() {
 		cart.clear();
 		menuCustomer("");
 	}
-	else 
+	else
 	{
 		removeFromCart(checkout);
 	}
@@ -825,10 +828,10 @@ void printReceipt(string id) {
 
 	headerLogo();
 	cout << "========================================================================" << endl;
-	cout << "                           RECEIPT #" + id<< endl << endl;
+	cout << "                           RECEIPT #" + id << endl << endl;
 	cout << "                     Time / Date : " << date << endl;
 	cout << "========================================================================" << endl;
-	
+
 	cout << t;
 
 	cout << endl;
@@ -841,16 +844,16 @@ void printReceipt(string id) {
 	cout << "========================================================================" << endl;
 	cout << "                     THANK YOU, PLEASE COME AGAIN" << endl;
 	cout << "========================================================================" << endl;
-	
+
 }
 
 vector<map<string, string>> findAllOrders()
 {
-	
+
 	vector<map<string, string>> orders;
 	mysql_query(conn, "SELECT id, total_price, after_discount, created_at FROM orders");
 	res = mysql_store_result(conn);
-	
+
 	while (row = mysql_fetch_row(res))
 	{
 		map<string, string> order;
@@ -868,7 +871,7 @@ vector<map<string, string>> findAllOrders()
 
 void viewAllOrders(string auth_name, string error = "") {
 	system("cls");
-	
+
 	vector<map<string, string>> orders = findAllOrders();
 
 	headerLogo();
@@ -905,7 +908,7 @@ void viewAllOrders(string auth_name, string error = "") {
 		{
 			bool found = false;
 			string id = "";
-			
+
 			system("cls");
 
 			headerLogo();
@@ -972,7 +975,7 @@ void viewAllOrders(string auth_name, string error = "") {
 void updateItems(string auth_name, string error)
 {
 	system("cls");
-	
+
 	string select;
 	vector<map<string, string>> categories = findAllCategories();
 
@@ -1001,7 +1004,7 @@ void updateItems(string auth_name, string error)
 			{
 				vector<map<string, string>> items = findAllItemsByCategory(categories[i]["id"]);
 				system("cls");
-				cout << " >>    LIST OF ITEMS FOR CATEGORY: "<< categories[i]["name"] << "     <<" << endl << endl;
+				cout << " >>    LIST OF ITEMS FOR CATEGORY: " << categories[i]["name"] << "     <<" << endl << endl;
 				printItems(items, categories[i], "staff");
 				if (item_error != "")
 				{
@@ -1010,7 +1013,7 @@ void updateItems(string auth_name, string error)
 				}
 				cout << endl << "Enter (I/i) to insert new item or";
 				cout << endl << "Enter (B/b) to go back or";
-				cout<< endl << "Enter the item CODE to update current items: ";
+				cout << endl << "Enter the item CODE to update current items: ";
 				getline(cin, select);
 				if (select == "I" || select == "i")
 				{
@@ -1084,12 +1087,12 @@ bool editItem(map<string, string> item)
 	getline(cin, price);
 	cout << "New item stock :";
 	getline(cin, stock);
-	
+
 	if (item["is_listed"] == "1")
 	{
 		cout << "Unlist item?(Y/y) :";
 		getline(cin, select);
-		if(select == "Y" || select == "y")
+		if (select == "Y" || select == "y")
 		{
 			is_listed = "0";
 		}
@@ -1136,7 +1139,7 @@ void viewMonthlySale(string auth_name) {
 
 	headerLogo();
 
-	cout << "Enter year (Default year is '"<< this_year <<"'): ";
+	cout << "Enter year (Default year is '" << this_year << "'): ";
 	getline(cin, year);
 
 	if (year == "")
@@ -1225,7 +1228,7 @@ void viewMonthlySale(string auth_name) {
 	menuStaff(auth_name, "");
 }
 
-void addStaff(string auth_name, string error) 
+void addStaff(string auth_name, string error)
 {
 	system("cls");
 
@@ -1288,9 +1291,9 @@ void addStaff(string auth_name, string error)
 }
 
 bool insertStaff(string username, string password, string name, string admin)
-{	
+{
 	string _q = "INSERT INTO staff (`username`, `password`, `name`, `is_admin`) VALUES ('" + username + "', SHA2('" + password + "', 256), '" + name + "', '" + admin + "')";
-	
+
 	const char* _u = _q.c_str();
 
 	int qstate = mysql_query(conn, _u);
@@ -1313,7 +1316,7 @@ void deleteStaff(string auth_name, string id)
 	viewStaff(auth_name, "");
 }
 
-void viewStaff(string auth_name, string error) 
+void viewStaff(string auth_name, string error)
 {
 	system("cls");
 
@@ -1334,7 +1337,7 @@ void viewStaff(string auth_name, string error)
 	t.add("ADMIN");
 	t.endOfRow();
 
-	while (row = mysql_fetch_row(res)) 
+	while (row = mysql_fetch_row(res))
 	{
 		map<string, string> staff;
 		staff["id"] = row[0];
@@ -1347,7 +1350,7 @@ void viewStaff(string auth_name, string error)
 		t.add(row[2]);
 
 		int is_admin;
-		stringstream (row[3]) >> is_admin; 
+		stringstream(row[3]) >> is_admin;
 
 		if (is_admin == 1) {
 			t.add("YES");
@@ -1370,7 +1373,7 @@ void viewStaff(string auth_name, string error)
 
 	cout << "Enter Staff No: (Enter 0 to exit) : => ";
 	getline(cin, staff_id);
-	
+
 	if (staff_id == "0") {
 		menuStaff(auth_name, "");
 	}
@@ -1491,7 +1494,7 @@ void updateCategoryDiscount(string auth_name, string error = "") {
 	cout << "Enter (Y/y) to update or other key to back to Menu. : => ";
 	getline(cin, selection);
 
-	if (selection == "Y" || selection == "y") 
+	if (selection == "Y" || selection == "y")
 	{
 		string choice;
 		cout << "Select category to update:" << endl;
@@ -1529,7 +1532,7 @@ void updateCategoryDiscount(string auth_name, string error = "") {
 					getline(cin, reverse_is_discount);
 				}
 
-				if(reverse_is_discount == "Y" || reverse_is_discount == "y")
+				if (reverse_is_discount == "Y" || reverse_is_discount == "y")
 				{
 					string reverse_active;
 					if (active)
@@ -1554,7 +1557,7 @@ void updateCategoryDiscount(string auth_name, string error = "") {
 		}
 		updateCategoryDiscount(auth_name, "Please enter correct category CODE!");
 	}
-	else 
+	else
 	{
 		menuStaff(auth_name, "");
 	}
