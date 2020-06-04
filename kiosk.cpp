@@ -1,3 +1,5 @@
+#pragma warning(disable : 4996)
+
 #include <iostream>
 #include <string>
 #include <cstdio>
@@ -11,6 +13,7 @@
 #include <vector>
 #include <map>
 #include <iomanip>
+#include <ctime>
 #include "TextTable.h"
 
 using namespace std;
@@ -60,17 +63,19 @@ public:
 
 // UI
 void headerLogo();
-void menuCustomer();
+void menuCustomer(string);
+
+// Common functions
+vector<map<string, string>> findAllCategories();
+vector<map<string, string>> findAllItemsByCategory(string);
+vector<map<string, string>> findListedItemsByCategory(string);
+void printItemCategories(vector<map<string, string>>, string);
+void printItems(vector<map<string, string>>, map<string, string>, string);
 
 // Function for client
-vector<map<string, string>> findAllCategories();
-vector<map<string, string>> findItemByCategory(string);
-void printItemCategories(vector<map<string, string>>);
-void printItems(vector<map<string, string>>, map<string, string>);
 void viewItemCategories(string);
 void viewItemsByCategory(map<string, string>);
-void viewAllOrders(string, string);
-void viewAllOrderItems(string, string);
+
 void viewCart();
 void removeFromCart(string);
 void itemCheckout();
@@ -81,15 +86,18 @@ void printReceipt(string);
 void menuStaff(string, string);
 
 //// Staff Management
+void viewAllOrders(string, string);
 void viewStaff(string, string);
 void updateStaff(string, string, vector<map<string, string>>, string);
 void addStaff(string, string);
+bool insertStaff(string, string, string, string);
 void deleteStaff(string, string);
 void login(string);
-void logout(string);
 
 //// Inventory Management
 void updateItems(string, string);
+bool insertItem(map<string, string>, int);
+bool editItem(map<string, string>);
 void updateCategoryDiscount(string, string);
 
 //// Sales analysis
@@ -97,13 +105,6 @@ void viewMonthlySale(string);
 
 // Calculation Function
 float calculateDiscountedPrice(float, float);
-
-// Unknown
-void endMenuStaff(string);
-
-// Password hashing function
-unsigned int SHF(string);
-string ToHex(unsigned int);
 
 int main()
 {
@@ -128,7 +129,7 @@ int main()
 
 	if (role == 1) 
 	{
-		menuCustomer();
+		menuCustomer("");
 	}
 	else if (role == 2)
 	{
@@ -159,7 +160,7 @@ void login(string error)
 	cout << "Password: ";
 	getline(cin, password);
 
-	string findbyid_query = "SELECT is_admin, name FROM staff WHERE username = '" + username + "' AND password='" + password + "'";
+	string findbyid_query = "SELECT is_admin, name FROM staff WHERE username = '" + username + "' AND password=SHA2('" + password + "', 256)";
 	const char* _q = findbyid_query.c_str();
 	mysql_query(conn, _q);
 	res = mysql_store_result(conn);
@@ -190,12 +191,16 @@ void login(string error)
 	}
 }
 
-void menuCustomer() {
+void menuCustomer(string error) {
 
 	int chooseOneFromMenu = 0;
-	char exitSurity;
 
 	headerLogo();
+
+	if (error != "")
+	{
+		cout << error << endl;
+	}
 
 	cout << "Please Select Menu" << endl;
 	cout << "1. See available items" << endl;
@@ -224,32 +229,9 @@ void menuCustomer() {
 			main();
 			break;
 		}
-		case 9:
-		{
-		ExitProgram:
-			cout << "Program terminating. Are you sure? (y/N): ";
-			getline(cin, temp);
-			stringstream (temp) >> exitSurity;
-			if (exitSurity == 'y' || exitSurity == 'Y') {
-
-			}
-			else if (exitSurity == 'n' || exitSurity == 'N') {
-				system("cls");
-				menuCustomer();
-			}
-			else {
-				cout << "Next time choose after read the corresponding line." << endl;
-				goto ExitProgram;
-			}
-			break;
-		}
 		default:
 		{
-			cout << "Please choose between 1 - 2. Press Enter To Continue...";
-			_getch();
-			system("cls");
-			menuCustomer();
-			break;
+			menuCustomer("Please select correct number");
 		}
 	}
 
@@ -349,13 +331,13 @@ vector<map<string, string>> findAllCategories()
 	return categories;
 }
 
-void printItemCategories(vector<map<string, string>> categories)
+void printItemCategories(vector<map<string, string>> categories, string viewer)
 {
 	cout << " >>    SELECT PRODUCT CATEGORIES     <<" << endl << endl;
 	for (int i = 0; i < categories.size(); i++)
 	{
 		cout << categories[i]["id"] << ". " << categories[i]["name"] << " ";
-		if (categories[i]["is_discount"] == "1")
+		if (categories[i]["is_discount"] == "1" && viewer == "customer")
 		{
 			cout << "(ON " << categories[i]["discount"] << "% DISCOUNT NOW!!)";
 		}
@@ -378,7 +360,7 @@ void viewItemCategories(string error)
 	
 	vector<map<string, string>> categories = findAllCategories();
 
-	printItemCategories(categories);
+	printItemCategories(categories, "customer");
 	
 	cout << endl << "Enter (M/m) to go to Main Menu" << endl;
 	cout << endl << "Selection : ";
@@ -386,7 +368,7 @@ void viewItemCategories(string error)
 
 	if (choice == "M" || choice == "m")
 	{
-		menuCustomer();
+		menuCustomer("");
 	}
 
 	for (int i = 0; i < categories.size(); i++)
@@ -400,12 +382,34 @@ void viewItemCategories(string error)
 	viewItemCategories("Please Enter Correct ID");
 }
 
-vector<map<string, string>> findItemByCategory(string category_id)
+vector<map<string, string>> findAllItemsByCategory(string category_id)
 {
 	map<string, string> item;
 	vector<map<string, string>> items;
 
-	string finditem_query = "SELECT id, code, name, price, stock FROM items WHERE category='" + category_id + "' ORDER BY code ASC";
+	const char* qi = ("SELECT id, code, name, price, stock, is_listed FROM items WHERE category='" + category_id + "' ORDER BY code ASC").c_str();
+	mysql_query(conn, qi);
+	res = mysql_store_result(conn);
+
+	while (row = mysql_fetch_row(res))
+	{
+		item["id"] = row[0];
+		item["code"] = row[1];
+		item["name"] = row[2];
+		item["price"] = row[3];
+		item["stock"] = row[4];
+		item["is_listed"] = row[5];
+		items.push_back(item);
+	}
+	return items;
+}
+
+vector<map<string, string>> findListedItemsByCategory(string category_id)
+{
+	map<string, string> item;
+	vector<map<string, string>> items;
+
+	string finditem_query = "SELECT id, code, name, price, stock FROM items WHERE category='" + category_id + "' AND is_listed='1' ORDER BY code ASC";
 	const char* qi = finditem_query.c_str();
 	mysql_query(conn, qi);
 	res = mysql_store_result(conn);
@@ -422,13 +426,11 @@ vector<map<string, string>> findItemByCategory(string category_id)
 	return items;
 }
 
-void printItems(vector<map<string, string>> items, map<string, string> category)
+void printItems(vector<map<string, string>> items, map<string, string> category, string viewer)
 {
-	int is_discount;
 	float discount;
 
 	stringstream(category["discount"]) >> discount;
-	stringstream(category["is_discount"]) >> is_discount;
 
 	TextTable t('-', '|', '+');
 
@@ -436,9 +438,13 @@ void printItems(vector<map<string, string>> items, map<string, string> category)
 	t.add("PRICE (RM)");
 	t.add("NAME");
 	t.add("STOCK");
-	if (is_discount == 1)
+	if (category["is_discount"] == "1" && viewer == "customer")
 	{
 		t.add("DISCOUNTED PRICE");
+	}
+	if (viewer == "staff")
+	{
+		t.add("LISTED");
 	}
 	t.endOfRow();
 
@@ -457,7 +463,7 @@ void printItems(vector<map<string, string>> items, map<string, string> category)
 			t.add("OUT OF STOCK");
 		}
 
-		if (is_discount == 1)
+		if (category["is_discount"] == "1" && viewer == "customer")
 		{
 			float price;
 			string discounted_price;
@@ -467,7 +473,17 @@ void printItems(vector<map<string, string>> items, map<string, string> category)
 			ss >> discounted_price;
 			t.add(discounted_price);
 		}
-
+		if (viewer == "staff")
+		{
+			if (items[i]["is_listed"] == "1")
+			{
+				t.add("YES");
+			}
+			else
+			{
+				t.add("NO");
+			}
+		}
 		t.endOfRow();
 	}
 
@@ -487,13 +503,13 @@ void viewItemsByCategory(map<string, string> category)
 
 	stringstream(category["discount"]) >> discount;
 	stringstream(category["is_discount"]) >> is_discount;
-	vector<map<string, string>> items = findItemByCategory(category["id"]);
+	vector<map<string, string>> items = findListedItemsByCategory(category["id"]);
 
 	headerLogo();
 
 	cout << " >>    PICK YOUR PRODUCTS     <<" << endl << endl;
 
-	printItems(items, category);
+	printItems(items, category, "customer");
 
 	cout << endl;
 
@@ -581,7 +597,7 @@ void viewItemsByCategory(map<string, string> category)
 			if (again == "X" || again == "x") 
 			{
 				cart.clear();
-				menuCustomer();
+				menuCustomer("");
 			}
 			else if (again == "B" || again == "b") 
 			{
@@ -632,7 +648,8 @@ void itemCheckout()
 		string get_order_id = "SELECT id FROM orders ORDER by id DESC LIMIT 1";
 		lid_str = get_order_id.c_str();
 		
-		if (!mysql_query(conn, lid_str)) {
+		if (!mysql_query(conn, lid_str)) 
+		{
 			res = mysql_store_result(conn);
 			row = mysql_fetch_row(res);
 
@@ -649,14 +666,15 @@ void itemCheckout()
 				mysql_query(conn, usq);
 			}
 		}
-		else {
+		else 
+		{
 			cout << "Query Execution Problem!" << mysql_errno(conn) << endl;
 		}
 		cart.clear();
 		printReceipt(orders["id"]);
 		cout << endl << "Press any key to proceed...";
 		getline(cin, temp);
-		menuCustomer();
+		menuCustomer("");
 	}
 }
 
@@ -745,7 +763,7 @@ void viewCart() {
 	else if (checkout == "X" || checkout == "x")
 	{
 		cart.clear();
-		menuCustomer();
+		menuCustomer("");
 	}
 	else 
 	{
@@ -763,7 +781,7 @@ void removeFromCart(string id) {
 	}
 	else
 	{
-		menuCustomer();
+		menuCustomer("");
 	}
 }
 
@@ -826,18 +844,32 @@ void printReceipt(string id) {
 	
 }
 
-
+vector<map<string, string>> findAllOrders()
+{
+	
+	vector<map<string, string>> orders;
+	mysql_query(conn, "SELECT id, total_price, after_discount, created_at FROM orders");
+	res = mysql_store_result(conn);
+	
+	while (row = mysql_fetch_row(res))
+	{
+		map<string, string> order;
+		order["id"] = row[0];
+		order["total_price"] = row[1];
+		order["after_discount"] = row[2];
+		order["created_at"] = row[3];
+		orders.push_back(order);
+	}
+	return orders;
+}
 
 
 //STAFF FUNCTION
 
 void viewAllOrders(string auth_name, string error = "") {
 	system("cls");
-	string id;
 	
-	mysql_query(conn, "SELECT id, total_price, after_discount, created_at FROM orders");
-	res = mysql_store_result(conn);
-	row = mysql_fetch_row(res);
+	vector<map<string, string>> orders = findAllOrders();
 
 	headerLogo();
 
@@ -848,67 +880,91 @@ void viewAllOrders(string auth_name, string error = "") {
 
 	cout << " >>    ALL ORDERS     <<" << endl << endl;
 
-	if(row) {
-
+	if (orders.size() > 0)
+	{
+		string order_error;
 		TextTable t('-', '|', '+');
-
 		t.add("ID");
 		t.add("TOTAL PRICE (RM)");
 		t.add("DISCOUNTED PRICE (RM)");
-		t.add("ORDERED DATE/TIME");
+		t.add("ORDER DATE/TIME");
 		t.endOfRow();
 
-		do {
-			t.add(row[0]);
-			t.add(row[1]);
-			t.add(row[2]);
-			t.add(row[3]);
+		for (int i = 0; i < orders.size(); i++)
+		{
+			t.add(orders[i]["id"]);
+			t.add(orders[i]["price"]);
+			t.add(orders[i]["after_discount"]);
+			t.add(orders[i]["created_at"]);
 			t.endOfRow();
-			row = mysql_fetch_row(res);
-		} while (row);
-		
+		}
+
 		t.setAlignment(4, TextTable::Alignment::RIGHT);
 
-		cout << t << endl;
-
-		cout << "View order? Enter order ID or (B/b) to go back" << endl;
-		
-		getline(cin, id);
-
-		if (id == "B" || id == "b")
+		while (true)
 		{
-			menuStaff(auth_name, "");
+			bool found = false;
+			string id = "";
+			
+			system("cls");
+
+			headerLogo();
+
+			cout << t << endl;
+
+			if (order_error != "")
+			{
+				cout << order_error << endl;
+				order_error = "";
+			}
+
+			cout << "View order receipt? Enter order ID or (B/b) to go back" << endl;
+
+			getline(cin, id);
+
+			if (id == "B" || id == "b")
+			{
+				break;
+			}
+			else
+			{
+				for (int i = 0; i < orders.size(); i++)
+				{
+					if (id == orders[i]["id"])
+					{
+						printReceipt(id);
+						found = true;
+						break;
+					}
+				}
+			}
+			if (found)
+			{
+				cout << "(B/b) to go back or any key to go to staff menu" << endl;
+				string select;
+				getline(cin, select);
+				if (select == "B" || select == "b")
+				{
+					continue;
+				}
+				else
+				{
+					break;
+				}
+			}
+			else
+			{
+				order_error = "Please Order with ID: " + id + " does not exist";
+			}
 		}
-		else
-		{
-			viewAllOrderItems(auth_name, id);
-		}
+		menuStaff(auth_name, "");
 	}
 	else
 	{
 		cout << "No order found" << endl << endl;
 
 		cout << "Enter any key to go back" << endl;
-		getline(cin, id);
-		menuStaff(auth_name, "");
-	}
-}
-
-void viewAllOrderItems(string auth_name, string id)
-{
-	printReceipt(id);
-
-	cout << "(B/b) to go back or any key to go to staff menu" << endl;
-
-	string select;
-	getline(cin, select);
-
-	if (select == "B" || select == "b")
-	{
-		viewAllOrders(auth_name, "");
-	}
-	else
-	{
+		getline(cin, temp);
 		menuStaff(auth_name, "");
 	}
 }
@@ -920,114 +976,272 @@ void updateItems(string auth_name, string error)
 	string select;
 	vector<map<string, string>> categories = findAllCategories();
 
-	printItemCategories(categories);
+	printItemCategories(categories, "staff");
 
 	if (error != "")
 	{
 		cout << error << endl;
 	}
+
+	cout << endl << "Enter category number or (B/b) to back to menu: " << endl;
 	cout << "Selection: ";
 	getline(cin, select);
+
+	if (select == "B" || select == "b")
+	{
+		menuStaff(auth_name, "");
+	}
 
 	for (int i = 0; i < categories.size(); i++)
 	{
 		if (select == categories[i]["id"])
 		{
-			vector<map<string, string>> items = findItemByCategory(categories[i]["id"]);
-			system("cls");
-			cout << " >>    LIST OF ITEMS FOR CATEGORY: "<< categories[i]["name"] << "     <<" << endl << endl;
-			printItems(items, categories[i]);
-			cout << "";
-			getline(cin, select);
+			string item_error = "";
+			while (true)
+			{
+				vector<map<string, string>> items = findAllItemsByCategory(categories[i]["id"]);
+				system("cls");
+				cout << " >>    LIST OF ITEMS FOR CATEGORY: "<< categories[i]["name"] << "     <<" << endl << endl;
+				printItems(items, categories[i], "staff");
+				if (item_error != "")
+				{
+					cout << endl << item_error << endl;
+					item_error = "";
+				}
+				cout << endl << "Enter (I/i) to insert new item or";
+				cout << endl << "Enter (B/b) to go back or";
+				cout<< endl << "Enter the item CODE to update current items: ";
+				getline(cin, select);
+				if (select == "I" || select == "i")
+				{
+					if (!insertItem(categories[i], items.size() + 1))
+					{
+						item_error = "Please enter correct price/stock for the item";
+					}
+				}
+				else if (select == "B" || select == "b")
+				{
+					break;
+				}
+				else
+				{
+					int j = 0;
+					do
+					{
+						if (select == items[j]["code"])
+						{
+							if (!editItem(items[j]))
+							{
+								item_error = "Please enter correct price/stock for the item";
+							}
+							break;
+						}
+						j++;
+						if (j == items.size())
+						{
+							item_error = "Please select correct item CODE";
+						}
+					} while (j < items.size());
+				}
+			}
+
+			updateItems(auth_name, "");
 		}
 	}
-
 	updateItems(auth_name, "Please select category ID");
 }
 
+bool insertItem(map<string, string> category, int num)
+{
+	string code_num, name, price, stock;
+	stringstream ss;
+	ss << fixed << num;
+	ss >> code_num;
+	string item_code = category["code"] + code_num;
+	cout << "Item name: ";
+	getline(cin, name);
+	cout << "Item price(RM) :";
+	getline(cin, price);
+	cout << "Item stock :";
+	getline(cin, stock);
+
+	const char* _u = ("INSERT INTO items (code, name, stock, price, category) VALUES ('" + item_code + "', '" + name + "', '" + stock + "', '" + price + "', '" + category["id"] + "')").c_str();
+
+	if (mysql_query(conn, _u))
+	{
+		return false;
+	}
+
+	return true;
+}
+
+bool editItem(map<string, string> item)
+{
+	string name, price, stock, select, is_listed;
+	cout << "New item name: ";
+	getline(cin, name);
+	cout << "New item price(RM) :";
+	getline(cin, price);
+	cout << "New item stock :";
+	getline(cin, stock);
+	
+	if (item["is_listed"] == "1")
+	{
+		cout << "Unlist item?(Y/y) :";
+		getline(cin, select);
+		if(select == "Y" || select == "y")
+		{
+			is_listed = "0";
+		}
+		else
+		{
+			is_listed = item["is_listed"];
+		}
+	}
+	else
+	{
+		cout << "List item?(Y/y) :";
+		getline(cin, select);
+		if (select == "Y" || select == "y")
+		{
+			is_listed = "1";
+		}
+		else
+		{
+			is_listed = item["is_listed"];
+		}
+	}
+
+	const char* _u = ("UPDATE items SET name='" + name + "', stock='" + stock + "', price='" + price + "', is_listed='" + is_listed + "' WHERE id='" + item["id"] + "'").c_str();
+
+	if (mysql_query(conn, _u))
+	{
+		return false;
+	}
+
+	return true;
+}
+
 void viewMonthlySale(string auth_name) {
+	system("cls");
 
-	//max day in a year
-	int year,
-		month = 1;
+	time_t now = time(0);
+
+	tm *ltm = localtime(&now);
+
+	string year, this_year;
+	stringstream ss;
+	ss << fixed << (1900 + ltm->tm_year);
+	ss >> this_year;
 
 	headerLogo();
 
-	cout << ">>  Monthly Sale Report <<" << endl << endl;
+	cout << "Enter year (Default year is '"<< this_year <<"'): ";
+	getline(cin, year);
 
-
-	do {
-		cout << "Please Enter Years(EX:2020). Year > :";
-		getline(cin, temp);
-		stringstream (temp) >> year;
-
-	} while (year < 1990 || year > 2020);
-
-	string date_str[31];
-	float monthly_sale[12] = { 0.00 };
-
-	while (month <= 12) {
-
-		string dt = to_string(year) + "-" + to_string(month);
-
-
-		string daily_sale_str = "SELECT created_at, sum(after_discount) from orders where YEAR(created_at) = '" + to_string(year) + "' AND MONTH(created_at) = '" + to_string(month) + "' group by month(created_at);";
-		const char* daily_sale_q = daily_sale_str.c_str();
-		mysql_query(conn, daily_sale_q);
-		res = mysql_store_result(conn);
-
-		int ttlRow = mysql_num_rows(res);
-
-		if (ttlRow > 0) {
-			row = mysql_fetch_row(res);
-			monthly_sale[month] = stof(row[1]);
-		}
-		else {
-			monthly_sale[month] = stof("0");
-		}
-
-		date_str[month] = dt;
-		month++;
-
+	if (year == "")
+	{
+		year = this_year;
 	}
 
-	//reuse var
-	month = 1;
+	string _q = "SELECT MONTH(created_at) AS month_num, SUM(after_discount) AS monthly_total FROM orders WHERE YEAR(created_at)='" + year + "' GROUP BY MONTH(created_at)";
+	const char* qi = _q.c_str();
+	mysql_query(conn, qi);
+	res = mysql_store_result(conn);
 
-	headerLogo();
-	cout << "MONTHLY SALE REPORT FOR " + to_string(year) << endl << endl;
+	cout << " >>    MONTHLY SALE FOR " << year << "     <<" << endl << endl;
 
-	TextTable t('-', '|', '+');
-
-	t.add("DATE");
-	t.add("TOTAL SALE");
-	t.endOfRow();
-
-	while (month <= 12) {
-
-		t.add(date_str[month]);
-		t.add("RM " + to_string(monthly_sale[month]));
+	if (row = mysql_fetch_row(res))
+	{
+		TextTable t('-', '|', '+');
+		t.add("MONTH");
+		t.add("TOTAL (RM)");
 		t.endOfRow();
-		month++;
+		do {
+			int month;
+			stringstream(row[0]) >> month;
+			if (month == 1)
+			{
+				t.add("JANUARY");
+			}
+			else if (month == 2)
+			{
+				t.add("FEBRUARY");
+			}
+			else if (month == 3)
+			{
+				t.add("MARCH");
+			}
+			else if (month == 4)
+			{
+				t.add("APRIL");
+			}
+			else if (month == 5)
+			{
+				t.add("MAY");
+			}
+			else if (month == 6)
+			{
+				t.add("JUNE");
+			}
+			else if (month == 7)
+			{
+				t.add("JULY");
+			}
+			else if (month == 8)
+			{
+				t.add("AUGUST");
+			}
+			else if (month == 9)
+			{
+				t.add("SEPTEMBER");
+			}
+			else if (month == 10)
+			{
+				t.add("OCTOBER");
+			}
+			else if (month == 11)
+			{
+				t.add("NOVEMBER");
+			}
+			else if (month == 12)
+			{
+				t.add("DECEMBER");
+			}
+			t.add(row[1]);
+			t.endOfRow();
+		} while (row = mysql_fetch_row(res));
+
+		t.setAlignment(2, TextTable::Alignment::RIGHT);
+
+		cout << t;
 	}
-
-	t.setAlignment(2, TextTable::Alignment::RIGHT);
-	cout << t;
-
-	endMenuStaff(auth_name);
+	else
+	{
+		cout << "No record found for Year " << year << endl << endl;
+	}
+	cout << "Press any key to go back..." << endl;
+	getline(cin, temp);
+	menuStaff(auth_name, "");
 }
 
 void addStaff(string auth_name, string error) 
 {
 	system("cls");
 
-	string username, password, name, admin;
+	string select, username, password, name, admin;
 
 	headerLogo();
 	cout << ">>        Add Staff      <<" << endl;
 	if (error != "")
 	{
 		cout << error << endl;
+	}
+	cout << "(B/b) for back or any key to proceed: ";
+	getline(cin, select);
+	if (select == "B" || select == "b")
+	{
+		menuStaff(auth_name, "");
 	}
 	cout << "Enter new username: ";
 	getline(cin, username);
@@ -1045,9 +1259,25 @@ void addStaff(string auth_name, string error)
 	{
 		admin = "0";
 	}
-	const char* _u = ("INSERT INTO staff (username, password, name, is_admin) VALUES ('" + username + "', '" + password + "', '" + name + "', '" + admin + "')").c_str();
-	
-	if (!mysql_query(conn, _u))
+
+	if (username == "")
+	{
+		addStaff(auth_name, "Username cannot be empty!");
+	}
+
+	if (password == "")
+	{
+		addStaff(auth_name, "Password cannot be empty!");
+	}
+
+	if (name == "")
+	{
+		addStaff(auth_name, "Name cannot be empty!");
+	}
+
+	bool add_staff = insertStaff(username, password, name, admin);
+
+	if (add_staff)
 	{
 		viewStaff(auth_name, "");
 	}
@@ -1055,6 +1285,23 @@ void addStaff(string auth_name, string error)
 	{
 		addStaff(auth_name, "Username already exist! Please pick other username.");
 	}
+}
+
+bool insertStaff(string username, string password, string name, string admin)
+{	
+	string _q = "INSERT INTO staff (`username`, `password`, `name`, `is_admin`) VALUES ('" + username + "', SHA2('" + password + "', 256), '" + name + "', '" + admin + "')";
+	
+	const char* _u = _q.c_str();
+
+	int qstate = mysql_query(conn, _u);
+
+	res = mysql_store_result(conn);
+
+	if (!qstate)
+	{
+		return true;
+	}
+	return false;
 }
 
 void deleteStaff(string auth_name, string id)
@@ -1313,53 +1560,10 @@ void updateCategoryDiscount(string auth_name, string error = "") {
 	}
 }
 
-void endMenuStaff(string auth_name) {
-
-	char choose;
-ExitMenu:
-	cout << "Press 'm' to Menu and any other key to Exit: ";
-	getline(cin, temp);
-	stringstream (temp) >> choose;
-	 
-	if (choose == 'm' || choose == 'M') {
-		menuStaff(auth_name, "");
-	}
-	else {
-		main();
-	}
-}
-
 void headerLogo() {
 
 	system("cls");
 	cout << endl << "                  ===================================" << endl;
 	cout << "                  || AWESOME PRODUCT FOR YOUR SKIN ||" << endl;
 	cout << "                  ===================================" << endl << endl;
-}
-
-unsigned int SHF(string input)
-{
-	string Salt = "salt";
-	unsigned int Salt_Byte;
-	unsigned int Hash;
-	for (int i = 0; i < input.length(); i++)
-	{
-		for (int j = 0; j < Salt.length(); j++)
-		{
-			Salt_Byte = Salt_Byte ^ (Salt[j]);
-		}
-		Hash = Hash ^ (input[i]);
-		Hash = Hash * Salt_Byte;
-	}
-	return Hash;
-}
-
-string ToHex(unsigned int input)
-{
-	string HexHash;
-	stringstream hexstream;
-	hexstream << hex << input;
-	HexHash = hexstream.str();
-	transform(HexHash.begin(), HexHash.end(), HexHash.begin(), ::toupper);
-	return HexHash;
 }
